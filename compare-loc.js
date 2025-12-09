@@ -1,49 +1,51 @@
-function parseLocKeys(text) {
-  const keys = new Set();
+function parseLocKeysWithLines(text) {
+  const map = new Map(); // key -> lineNumber
+  const lines = text.split(/\r?\n/);
 
-  // 1) сначала режем по запятым — у тебя именно так разделены пары
-  const chunks = text.split(",");
+  lines.forEach((line, index) => {
+    const lineNumber = index + 1;
+    const chunks = line.split(",");
 
-  for (let raw of chunks) {
-    const s = raw.trim();
-    if (!s) continue;
+    for (let raw of chunks) {
+      const s = raw.trim();
+      if (!s) continue;
 
-    // 2) игнорируем явный мусор: одиночные слова без двоеточий/пробела-значения
-    //   но это лучше сделать позитивно: вытащить только то, что похоже на ключ
+      let key = null;
 
-    let key = null;
-
-    // вариант А: JSON‑подобный: "Key": "Value"
-    // (в русской версии видно: "ItemTransferAmount10": "Move 10" и т.п.)
-    const mQuoted = s.match(/^"([^"]+)"\s*:/);
-    if (mQuoted) {
-      key = mQuoted[1];
-    } else {
-      // вариант Б: простой: Key Value...
-      // (как в английском: ItemTransferAmount10 Move 10)
-      const firstSpace = s.indexOf(" ");
-      if (firstSpace > 0) {
-        key = s.slice(0, firstSpace).trim();
+      // "Key": "Value"
+      const mQuoted = s.match(/^"([^"]+)"\s*:/);
+      if (mQuoted) {
+        key = mQuoted[1];
       } else {
-        // если пробела нет, но строка без пробела — может быть чистый ключ без значения
-        // например: ScenarioDescriptionVallationStationStart:
-        const mSimple = s.match(/^([A-Za-z0-9_]+):?$/);
-        if (mSimple) key = mSimple[1];
+        // Key Value...
+        const firstSpace = s.indexOf(" ");
+        if (firstSpace > 0) {
+          key = s.slice(0, firstSpace).trim();
+        } else {
+          continue;
+        }
+      }
+
+      if (!key) continue;
+
+      if (key.length < 3) continue;
+      if (!/^[A-Za-z0-9_]+$/.test(key)) continue;
+      if (!/[A-Z_]/.test(key)) continue;
+
+      // записываем только первый раз (первая строка с таким ключом)
+      if (!map.has(key)) {
+        map.set(key, lineNumber);
       }
     }
+  });
 
-    if (!key) continue;
-
-    // отсеиваем явный шум: короткие слова, слова без заглавных/подчёркиваний
-    if (key.length < 3) continue;
-    if (!/[A-Z_]/.test(key)) continue;
-
-    keys.add(key);
-  }
-
-  return keys;
+  return map;
 }
 
+function parseLocKeys(text) {
+  // для RU нам номера строк не нужны, достаточно Set
+  return new Set(parseLocKeysWithLines(text).keys());
+}
 
 async function readFileAsText(file) {
   return new Promise((resolve, reject) => {
@@ -68,22 +70,29 @@ document.getElementById("compareBtn").addEventListener("click", async () => {
     readFileAsText(fileRu),
   ]);
 
-  const keysEn = parseLocKeys(textEn);
+  const keysEnWithLines = parseLocKeysWithLines(textEn);
   const keysRu = parseLocKeys(textRu);
 
   const missingInRu = [];
   const extraInRu = [];
 
-  for (const k of keysEn) {
-    if (!keysRu.has(k)) missingInRu.push(k);
+  // есть в EN, нет в RU
+  for (const [key, line] of keysEnWithLines.entries()) {
+    if (!keysRu.has(key)) {
+      missingInRu.push(`${key} (строка ${line})`);
+    }
   }
-  for (const k of keysRu) {
-    if (!keysEn.has(k)) extraInRu.push(k);
+
+  // есть в RU, нет в EN
+  for (const key of keysRu) {
+    if (!keysEnWithLines.has(key)) {
+      extraInRu.push(key);
+    }
   }
 
   document.getElementById("missingRu").textContent =
-    "Нет в переводе:\n" + missingInRu.sort().join("\n");
+    "Нет в переводе (есть в EN, нет в RU):\n" + missingInRu.sort().join("\n");
 
   document.getElementById("extraRu").textContent =
-    "Лишние в переводе:\n" + extraInRu.sort().join("\n");
+    "Лишние в переводе (есть в RU, нет в EN):\n" + extraInRu.sort().join("\n");
 });
