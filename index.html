@@ -1,14 +1,13 @@
 <meta charset="utf-8">
 
-<h3>1. Оригинал (EN)</h3>
-<input type="file" id="fileEn">
+<h3>1. Папка с оригиналами (EN)</h3>
+<input type="file" id="filesEn" multiple>
 
-<h3>2. Перевод (RU)</h3>
-<input type="file" id="fileRu">
-<br><br>
+<h3>2. Папка с переводами (RU)</h3>
+<input type="file" id="filesRu" multiple>
+
 <button id="compareBtn">Сравнить</button>
 
-<pre id="missingRu"></pre>
-<pre id="extraRu"></pre>
+<pre id="result"></pre>
 
-<script src="compare-loc.js"></script>
+<script src="compare-loc-folders.js"></script>
