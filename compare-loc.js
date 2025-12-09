@@ -1,16 +1,49 @@
 function parseLocKeys(text) {
-  // каждый «запись» выглядит как: Key Value, или Key , Value
-  // сначала разобьём по запятым, потом берём первый токен как ключ
   const keys = new Set();
-  text.split(",").forEach(chunk => {
-    const trimmed = chunk.trim();
-    if (!trimmed) return;
-    // ключ до первого пробела
-    const key = trimmed.split(/\s+/)[0];
-    if (key) keys.add(key);
-  });
+
+  // 1) сначала режем по запятым — у тебя именно так разделены пары
+  const chunks = text.split(",");
+
+  for (let raw of chunks) {
+    const s = raw.trim();
+    if (!s) continue;
+
+    // 2) игнорируем явный мусор: одиночные слова без двоеточий/пробела-значения
+    //   но это лучше сделать позитивно: вытащить только то, что похоже на ключ
+
+    let key = null;
+
+    // вариант А: JSON‑подобный: "Key": "Value"
+    // (в русской версии видно: "ItemTransferAmount10": "Move 10" и т.п.)
+    const mQuoted = s.match(/^"([^"]+)"\s*:/);
+    if (mQuoted) {
+      key = mQuoted[1];
+    } else {
+      // вариант Б: простой: Key Value...
+      // (как в английском: ItemTransferAmount10 Move 10)
+      const firstSpace = s.indexOf(" ");
+      if (firstSpace > 0) {
+        key = s.slice(0, firstSpace).trim();
+      } else {
+        // если пробела нет, но строка без пробела — может быть чистый ключ без значения
+        // например: ScenarioDescriptionVallationStationStart:
+        const mSimple = s.match(/^([A-Za-z0-9_]+):?$/);
+        if (mSimple) key = mSimple[1];
+      }
+    }
+
+    if (!key) continue;
+
+    // отсеиваем явный шум: короткие слова, слова без заглавных/подчёркиваний
+    if (key.length < 3) continue;
+    if (!/[A-Z_]/.test(key)) continue;
+
+    keys.add(key);
+  }
+
   return keys;
 }
+
 
 async function readFileAsText(file) {
   return new Promise((resolve, reject) => {
